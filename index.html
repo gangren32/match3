@@ -1,189 +1,174 @@
 <!--
 ИНСТРУКЦИЯ ПО НАСТРОЙКЕ:
 - Размер поля: BOARD_ROWS и BOARD_COLS (по умолчанию 8x8).
-- Размер логической плитки: TILE_SIZE (по умолчанию 64). Отображение масштабируется автоматически под экран (в т.ч. iPhone 15 Pro).
+- Размер плитки: базово 64px; на мобильных масштабируется автоматически. Можно зафиксировать, изменив MAX_TILE_PX.
 - Количество типов фишек: TILE_TYPES (по умолчанию 6).
-- Цели режимов: TARGET_SCORE (по ходам), MOVES_COUNT — число ходов, TIMED_SECONDS — длительность режима по времени.
-- Подсказка: HINT_DELAY_MS — задержка появления.
-Лицензия: весь код и встроенные ассеты — CC0/MIT.
+- Цели: TARGET_SCORE (по ходам), MOVES_COUNT, TIMED_SECONDS (по времени).
+- Подсказки: HINT_DELAY_MS (мс бездействия до подсветки).
+Лицензия: CC0/MIT. Файл самодостаточный, работает офлайн.
 -->
 <!DOCTYPE html>
 <html lang="ru">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="default" />
-<meta name="format-detection" content="telephone=no" />
-<meta name="color-scheme" content="light dark" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>3 в ряд</title>
+<meta name="color-scheme" content="light dark">
 <style>
   :root{
-    --bg:#ffffff; --fg:#111111; --muted:#666; --panel:#f2f2f2; --accent:#0072B2;
+    --bg:#ffffff; --fg:#111; --muted:#666; --panel:#f4f4f6;
+    --accent:#0072B2; --good:#009E73; --warn:#D55E00;
     --tile1:#E69F00; --tile2:#56B4E9; --tile3:#009E73; --tile4:#F0E442; --tile5:#0072B2; --tile6:#D55E00;
-    --board-shadow: 0 8px 24px rgba(0,0,0,.12);
+    --tile:64px; --rows:8; --cols:8;
+    --ring: 0 0 0 3px rgba(0,114,178,.35);
     --transition: 200ms;
-    --rows:8; --cols:8; --tile:64px;
   }
   @media (prefers-color-scheme: dark){
-    :root{ --bg:#0f1115; --fg:#f5f7fb; --muted:#a3a7b3; --panel:#171a21; --board-shadow: 0 8px 24px rgba(0,0,0,.5); }
+    :root{ --bg:#0f1115; --fg:#f5f7fb; --muted:#a3a7b3; --panel:#171a21; }
   }
-  html[data-theme="light"]{ color-scheme: light; --bg:#ffffff; --fg:#111; --muted:#666; --panel:#f2f2f2; --board-shadow:0 8px 24px rgba(0,0,0,.12) }
-  html[data-theme="dark"]{ color-scheme: dark; --bg:#0f1115; --fg:#f5f7fb; --muted:#a3a7b3; --panel:#171a21; --board-shadow:0 8px 24px rgba(0,0,0,.5) }
+  html[data-theme="light"]{ color-scheme:light; --bg:#fff; --fg:#111; --muted:#666; --panel:#f4f4f6; }
+  html[data-theme="dark"]{ color-scheme:dark; --bg:#0f1115; --fg:#f5f7fb; --muted:#a3a7b3; --panel:#171a21; }
 
-  *{ box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
-  body{
-    margin:0; background:var(--bg); color:var(--fg);
-    font: 16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans", Ubuntu, "Helvetica Neue", Arial;
-    display:flex; min-height:100dvh; flex-direction:column; align-items:center; gap:12px;
-  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans",Ubuntu,"Helvetica Neue",Arial}
   header{
-    width:100%; max-width:1024px; padding: calc(env(safe-area-inset-top) + 10px) clamp(10px,4vw,24px) 10px;
-    display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--panel); position:sticky; top:0; z-index:5;
-    box-shadow: 0 2px 8px rgba(0,0,0,.08);
+    position:sticky; top:0; z-index:10; background:var(--panel);
+    padding:10px max(12px,4vw); display:flex; align-items:center; justify-content:space-between; gap:10px;
+    border-bottom:1px solid rgba(0,0,0,.06);
   }
-  .top-left,.top-right{ display:flex; align-items:center; gap:8px; flex-wrap:wrap }
-  .stat{ padding:6px 10px; border-radius:12px; background:transparent; display:flex; gap:6px; align-items:center }
-  .stat b{ font-weight:700 }
+  .top-left,.top-right{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
+  .stat{padding:6px 10px; border-radius:10px; background:transparent; white-space:nowrap}
+  .stat b{font-weight:700}
   .btn{
-    border:1px solid rgba(127,127,127,.25); background:var(--bg); color:var(--fg);
-    padding:10px 14px; border-radius:14px; cursor:pointer; user-select:none;
-    font-size:15px; line-height:1; transition:transform .06s ease, background .2s, border-color .2s;
-    touch-action: manipulation;
+    appearance:none; border:1px solid rgba(127,127,127,.25); background:var(--bg); color:var(--fg);
+    padding:8px 12px; border-radius:12px; cursor:pointer; transition:transform .06s ease, background .2s, border-color .2s;
+    touch-action:manipulation; user-select:none;
   }
-  .btn:active{ transform: translateY(1px) scale(.98) }
-  .btn.primary{ border-color:transparent; background:var(--accent); color:#fff }
-  .btn.toggle[aria-pressed="true"]{ background:var(--accent); color:#fff }
-  .wrap{ width:100%; max-width:1024px; display:grid; place-items:center; padding: 8px clamp(10px,4vw,24px) 24px }
+  .btn.primary{background:var(--accent); color:#fff; border-color:transparent}
+  .btn.toggle[aria-pressed="true"]{background:var(--accent); color:#fff}
+  .wrap{max-width:1024px;margin:10px auto; padding:0 max(12px,4vw); display:grid; place-items:center}
   .board-shell{
-    width: min(96vw, calc(var(--tile)*var(--cols) + 24px));
-    aspect-ratio: 1 / 1; background:var(--panel); border-radius:24px; padding:12px;
-    box-shadow: var(--board-shadow); position:relative; overflow:hidden; display:grid; place-items:center;
+    width:100%; max-width: min(96vw, 720px); aspect-ratio:1/1; background:var(--panel);
+    border-radius:24px; padding:12px; box-shadow:0 8px 24px rgba(0,0,0,.15); position:relative; overflow:hidden;
+    display:grid; place-items:center;
   }
-  .board{
-    width: calc(var(--tile) * var(--cols)); height: calc(var(--tile) * var(--rows));
-    touch-action: none; /* критично для свайпа на iOS */
+  .board{ width: calc(var(--tile)*var(--cols)); height: calc(var(--tile)*var(--rows)); touch-action:none; /* важно для свайпа на iOS */ }
+  .tile{ transition: transform var(--transition) ease, opacity var(--transition) ease; cursor:pointer; will-change:transform,opacity; }
+  .tile:focus{outline:none}
+  .focus-ring{ pointer-events:none; opacity:0; transition:opacity .1s ease }
+  .tile:focus-visible .focus-ring, .tile.selected .focus-ring{ opacity:1 }
+  .hint{ animation: pulse 1.5s ease-in-out infinite; }
+  @keyframes pulse{
+    0%{ filter: drop-shadow(0 0 0 rgba(0,114,178,0)) }
+    50%{ filter: drop-shadow(0 0 10px rgba(0,114,178,.85)) }
+    100%{ filter: drop-shadow(0 0 0 rgba(0,114,178,0)) }
   }
-  /* Тайлы */
-  .tile{ transition: transform var(--transition) ease, opacity var(--transition) ease; will-change: transform, opacity; cursor:pointer; }
-  .tile .ring{ opacity:0; transition: opacity .12s ease }
-  .tile:focus-visible .ring, .tile.selected .ring{ opacity:1 }
-  .hint{ animation: m3-pulse 1.5s ease-in-out infinite }
-  @keyframes m3-pulse{ 0%{filter:none} 50%{filter: drop-shadow(0 0 10px rgba(0,114,178,.9))} 100%{filter:none} }
-  .shake{ animation: m3-shake .25s ease }
-  @keyframes m3-shake{
+  @keyframes shake{
     0%{ transform: translate(var(--x), var(--y)) }
     25%{ transform: translate(calc(var(--x) + 6px), var(--y)) }
     50%{ transform: translate(calc(var(--x) - 6px), var(--y)) }
-    75%{ transform: translate(calc(var(--x) + 4px), var(--y)) }
+    75%{ transform: translate(calc(var(--x) + 3px), var(--y)) }
     100%{ transform: translate(var(--x), var(--y)) }
   }
-  /* Оверлеи */
-  .overlay{ position:absolute; inset:0; background:rgba(0,0,0,.5); display:none; place-items:center; z-index:10 }
-  .overlay.show{ display:grid }
-  .card{ background:var(--bg); color:var(--fg); padding:16px; border-radius:16px; width:min(92vw,520px); box-shadow:var(--board-shadow) }
-  .card h2{ margin:0 0 8px }
-  .settings-grid{ display:grid; grid-template-columns: 1fr auto; gap:10px; align-items:center }
-  .switch{ display:inline-flex; align-items:center; gap:8px }
-  .switch input{ width:42px; height:24px; appearance:none; background:#aab; border-radius:999px; position:relative; outline:none; cursor:pointer; transition:background .2s }
-  .switch input:checked{ background:var(--accent) }
-  .switch input::after{ content:""; position:absolute; inset:3px auto auto 3px; width:18px; height:18px; border-radius:50%; background:#fff; transition: transform .2s }
-  .switch input:checked::after{ transform: translateX(18px) }
-  .sr-only{ position:absolute !important; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0 }
-  footer{ color:var(--muted); padding: 0 clamp(10px,4vw,24px) calc(env(safe-area-inset-bottom) + 16px) }
+  .shake{ animation: shake .25s ease }
 
-  /* Адаптация: автоматически подгоняем размер тайла под ширину экрана (включая iPhone 15 Pro) */
-  @media (max-width: 480px){
-    :root{ --tile: min(68px, calc((100vw - 48px) / var(--cols))) }
-    .btn{ padding:10px 12px }
-    .stat{ padding:4px 8px }
+  .overlay{ position:absolute; inset:0; display:none; place-items:center; background:rgba(0,0,0,.5); z-index:20 }
+  .overlay.show{ display:grid }
+  .card{ background:var(--bg); color:var(--fg); border-radius:16px; padding:16px; width:min(92vw,520px); box-shadow:0 8px 24px rgba(0,0,0,.25) }
+  .card h2{ margin:0 0 8px }
+  .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:flex-end }
+  .settings-grid{ display:grid; grid-template-columns:1fr auto; gap:10px; align-items:center }
+  .switch{ display:inline-flex; gap:8px; align-items:center }
+  .switch input{ width:44px; height:24px; appearance:none; background:#aaa; border-radius:999px; position:relative; outline:none; cursor:pointer; transition:background .2s }
+  .switch input:checked{ background:var(--accent) }
+  .switch input::after{ content:""; position:absolute; top:3px; left:3px; width:18px; height:18px; background:#fff; border-radius:50%; transition:transform .2s }
+  .switch input:checked::after{ transform: translateX(20px) }
+  footer{ color:var(--muted); padding:8px 16px 24px; text-align:center }
+
+  /* Динамический тайл на маленьких экранах под узкие iPhone */
+  @media (max-width: 420px){
+    .board-shell{ max-width: 96vw }
   }
 </style>
 </head>
 <body>
-<header aria-label="Панель управления">
-  <div class="top-left">
-    <div class="stat" aria-live="polite"><span>Счёт:</span> <b id="score">0</b></div>
-    <div class="stat" id="goalBox"><span id="goalLabel">Цель:</span> <b id="goal">500</b></div>
-    <div class="stat" id="movesBox"><span>Ходов:</span> <b id="moves">30</b></div>
-    <div class="stat" id="timeBox" style="display:none"><span>Время:</span> <b id="time">02:00</b></div>
-    <div class="stat"><span>Лучший:</span> <b id="best">0</b></div>
-  </div>
-  <div class="top-right">
-    <button class="btn primary" id="newGameBtn">Новая игра</button>
-    <button class="btn" id="pauseBtn" aria-pressed="false">Пауза</button>
-    <button class="btn" id="settingsBtn">Настройки</button>
-    <button class="btn toggle" id="soundBtn" aria-pressed="true">Звук: Вкл</button>
-  </div>
-</header>
+  <header aria-label="Панель управления">
+    <div class="top-left">
+      <div class="stat" id="scoreStat" aria-live="polite"><span>Счёт:</span> <b id="score">0</b></div>
+      <div class="stat" id="goalStat"><span id="goalLabel">Цель:</span> <b id="goal">500</b></div>
+      <div class="stat" id="movesStat"><span>Ходов:</span> <b id="moves">30</b></div>
+      <div class="stat" id="timeStat" style="display:none"><span>Время:</span> <b id="time">02:00</b></div>
+      <div class="stat"><span>Лучший:</span> <b id="best">0</b></div>
+    </div>
+    <div class="top-right">
+      <button class="btn primary" id="newGameBtn">Новая игра</button>
+      <button class="btn" id="pauseBtn" aria-pressed="false">Пауза</button>
+      <button class="btn" id="settingsBtn">Настройки</button>
+      <button class="btn toggle" id="soundBtn" aria-pressed="true">Звук: Вкл</button>
+    </div>
+  </header>
 
-<div class="wrap">
-  <div class="board-shell">
-    <svg id="board" class="board" role="grid" tabindex="0" aria-label="Игровое поле"></svg>
+  <div class="wrap">
+    <div class="board-shell" id="boardShell">
+      <svg id="board" class="board" role="grid" aria-label="Игровое поле 8 на 8" tabindex="0"></svg>
 
-    <div class="overlay" id="pauseOverlay" role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
-      <div class="card">
-        <h2 id="pauseTitle">Пауза</h2>
-        <div style="display:flex; justify-content:flex-end; gap:8px">
-          <button class="btn" id="resumeBtn">Продолжить</button>
+      <div class="overlay" id="pauseOverlay" role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
+        <div class="card">
+          <h2 id="pauseTitle">Пауза</h2>
+          <div class="row"><button class="btn" id="resumeBtn">Продолжить</button></div>
         </div>
       </div>
-    </div>
 
-    <div class="overlay" id="helpOverlay" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
-      <div class="card">
-        <h2 id="helpTitle">Как играть</h2>
-        <p>Собирайте 3+ фишек одного цвета по горизонтали или вертикали.</p>
-        <p>Свайпните фишку (тач) или кликните две соседние (мышь) для обмена. Клавиатура: стрелки + Enter/Пробел.</p>
-        <p>Комбинации: 4 — полосатая (линия), 5 — бомба цвета, Т/Г — бомба 3×3. Бонусы можно комбинировать.</p>
-        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:8px">
-          <label class="switch"><input type="checkbox" id="dontShowHelp"><span>Больше не показывать</span></label>
-          <button class="btn" id="helpOk">Понятно</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="overlay" id="settingsOverlay" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
-      <div class="card">
-        <h2 id="settingsTitle">Настройки</h2>
-        <div class="settings-grid" style="margin-top:8px">
-          <div>Режим</div>
-          <div>
-            <select id="modeSelect" aria-label="Режим">
-              <option value="moves">По ходам</option>
-              <option value="timed">По времени</option>
-            </select>
+      <div class="overlay" id="onboarding" role="dialog" aria-modal="true" aria-labelledby="onbTitle">
+        <div class="card">
+          <h2 id="onbTitle">Как играть</h2>
+          <p>Меняйте местами соседние фишки свайпом/перетаскиванием или кликом. Собирайте 3+ в ряд/колонку.</p>
+          <p>4 — полосатая (чистит линию), 5 — бомба цвета, Т/Г — бомба 3×3. Комбинации бонусов работают.</p>
+          <p>Клавиатура: стрелки, Enter/Space — выбрать, Esc — снять.</p>
+          <div class="row" style="justify-content:space-between">
+            <label class="switch"><input type="checkbox" id="dontShowHelp"><span>Больше не показывать</span></label>
+            <button class="btn" id="helpOk">Понятно</button>
           </div>
-          <div>Тема</div>
-          <div>
-            <select id="themeSelect" aria-label="Тема">
-              <option value="system">Системная</option>
-              <option value="light">Светлая</option>
-              <option value="dark">Тёмная</option>
-            </select>
+        </div>
+      </div>
+
+      <div class="overlay" id="settings" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+        <div class="card">
+          <h2 id="settingsTitle">Настройки</h2>
+          <div class="settings-grid" style="margin-top:8px">
+            <div>Режим игры</div>
+            <div>
+              <select id="modeSelect" aria-label="Режим">
+                <option value="moves">По ходам</option>
+                <option value="timed">По времени</option>
+              </select>
+            </div>
+            <div>Тема</div>
+            <div>
+              <select id="themeSelect" aria-label="Тема">
+                <option value="system">Системная</option>
+                <option value="light">Светлая</option>
+                <option value="dark">Тёмная</option>
+              </select>
+            </div>
+            <div>Звук</div>
+            <div class="switch"><input type="checkbox" id="soundToggle" checked></div>
           </div>
-          <div>Звук</div>
-          <div class="switch"><input type="checkbox" id="soundToggle" checked></div>
-        </div>
-        <div style="display:flex; justify-content:flex-end; margin-top:12px">
-          <button class="btn" id="settingsClose">Понятно</button>
+          <div class="row" style="margin-top:12px"><button class="btn" id="settingsClose">Понятно</button></div>
         </div>
       </div>
-    </div>
 
-    <div class="overlay" id="overOverlay" role="dialog" aria-modal="true" aria-labelledby="overTitle">
-      <div class="card">
-        <h2 id="overTitle">Итог</h2>
-        <p id="overText">Победа!</p>
-        <div style="display:flex; justify-content:flex-end">
-          <button class="btn primary" id="overNew">Новая игра</button>
+      <div class="overlay" id="gameOver" role="dialog" aria-modal="true" aria-labelledby="overTitle">
+        <div class="card">
+          <h2 id="overTitle">Итог</h2>
+          <p id="overText">Победа!</p>
+          <div class="row"><button class="btn primary" id="overNew">Новая игра</button></div>
         </div>
       </div>
-    </div>
 
+    </div>
   </div>
-</div>
-<footer aria-hidden="true">© CC0/MIT • Офлайн один файл • Адаптировано под iPhone 15 Pro и мобильные</footer>
+  <footer aria-hidden="true">© CC0/MIT. Один файл. Мобильная адаптация, свайпы/перетаскивание по тачу.</footer>
 
 <script>
 /* =========================
@@ -191,7 +176,7 @@
 ========================= */
 const BOARD_ROWS = 8;
 const BOARD_COLS = 8;
-const TILE_SIZE = 64; // логический размер; визуально масштабируется через CSS
+const MAX_TILE_PX = 64; // верхняя граница размера плитки
 const TILE_TYPES = 6;
 const TARGET_SCORE = 500;
 const MOVES_COUNT = 30;
@@ -200,177 +185,356 @@ const HINT_DELAY_MS = 5000;
 const TRANSITION_MS = 200;
 const SCORE_BASE3 = 10;
 const SCORE_EXTRA = 5;
-const SCORE_POWERUP = 50;
+const SCORE_POWERUP_ACT = 50;
 
 /* =========================
    СОСТОЯНИЕ
 ========================= */
-const Type = { NORMAL:'n', STRIPED_H:'sh', STRIPED_V:'sv', BOMB_3:'b3', COLOR:'cb' };
 let state = {
   mode: 'moves',
-  score: 0, best: 0, target: TARGET_SCORE,
-  movesLeft: MOVES_COUNT, timeLeft: TIMED_SECONDS,
-  paused: false, inputLocked: false,
-  selected: null, hintTimer: null, hintPair: null,
-  board: [], tilesById: new Map(), idGen:1,
-  cascade:0, soundOn:true, theme:'system',
+  score: 0,
+  best: 0,
+  target: TARGET_SCORE,
+  movesLeft: MOVES_COUNT,
+  timeLeft: TIMED_SECONDS,
+  paused: false,
+  inputLocked: false,
+  selected: null, // {r,c}
+  board: [],
+  tilesById: new Map(),
+  idCounter: 1,
+  cascade: 0,
+  hintTimer: null,
+  hintPair: null,
+  soundOn: true,
+  theme: 'system',
   rngSeed: Date.now() & 0x7fffffff,
-  drag: { id:null, startRC:null, startX:0, startY:0, didSwap:false }
+  tilePx: MAX_TILE_PX,
+  drag: {active:false, id:null, startX:0, startY:0, moved:false}
 };
+
+const Type = { NORMAL:'normal', STRIPED_H:'stripedH', STRIPED_V:'stripedV', BOMB_3:'bomb3', COLOR:'color' };
+const svgNS = 'http://www.w3.org/2000/svg';
+const boardSVG = document.getElementById('board');
+
+/* =========================
+   ТЕМА/ХРАНИЛИЩЕ
+========================= */
+function saveLocal(){
+  localStorage.setItem('m3_best', String(state.best));
+  localStorage.setItem('m3_mode', state.mode);
+  localStorage.setItem('m3_theme', state.theme);
+  localStorage.setItem('m3_sound', state.soundOn ? 'on' : 'off');
+}
+function loadLocal(){
+  state.best = parseInt(localStorage.getItem('m3_best')||'0',10);
+  state.mode = localStorage.getItem('m3_mode')||'moves';
+  state.theme = localStorage.getItem('m3_theme')||'system';
+  state.soundOn = (localStorage.getItem('m3_sound')||'on')==='on';
+}
+function applyTheme(){ if(state.theme==='system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', state.theme); }
+
+/* =========================
+   РАБОТА С РАЗМЕРОМ (МОБИЛЬНАЯ АДАПТАЦИЯ)
+========================= */
+function computeTilePx(){
+  // ширина контейнера минус паддинги: подгоняем плитку под экран; важно для iPhone 15 Pro/mini
+  const shell = document.getElementById('boardShell');
+  const shellRect = shell.getBoundingClientRect();
+  const pad = 24; // внутр. отступы board-shell
+  const maxW = Math.max(240, Math.floor(shellRect.width - pad));
+  const byCols = Math.floor(maxW / BOARD_COLS);
+  const tile = Math.max(36, Math.min(MAX_TILE_PX, byCols));
+  return tile;
+}
+function setBoardSize(){
+  state.tilePx = computeTilePx();
+  document.documentElement.style.setProperty('--tile', state.tilePx+'px');
+  document.documentElement.style.setProperty('--rows', BOARD_ROWS);
+  document.documentElement.style.setProperty('--cols', BOARD_COLS);
+  // ВАЖНО: явно устанавливаем width/height и viewBox, иначе на части iOS SVG может отрисоваться с 0px
+  const w = state.tilePx * BOARD_COLS;
+  const h = state.tilePx * BOARD_ROWS;
+  boardSVG.setAttribute('width', String(w));
+  boardSVG.setAttribute('height', String(h));
+  boardSVG.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  boardSVG.setAttribute('aria-label', `Игровое поле ${BOARD_ROWS} на ${BOARD_COLS}`);
+}
 
 /* =========================
    УТИЛИТЫ
 ========================= */
-function rng(){ state.rngSeed = (1103515245*state.rngSeed + 12345) & 0x7fffffff; return state.rngSeed/0x80000000; }
-function rint(n){ return (rng()*n)|0; }
-function inB(r,c){ return r>=0 && c>=0 && r<BOARD_ROWS && c<BOARD_COLS; }
-function neighbors(rc){ return [{r:rc.r-1,c:rc.c},{r:rc.r+1,c:rc.c},{r:rc.r,c:rc.c-1},{r:rc.r,c:rc.c+1}].filter(p=>inB(p.r,p.c)); }
-function el(id){ return document.getElementById(id); }
-function setVars(){ document.documentElement.style.setProperty('--rows', BOARD_ROWS); document.documentElement.style.setProperty('--cols', BOARD_COLS); document.documentElement.style.setProperty('--tile', TILE_SIZE+'px'); }
-function tfmt(s){ s=Math.max(0,s|0); const m=(s/60|0).toString().padStart(2,'0'); const ss=(s%60).toString().padStart(2,'0'); return m+':'+ss; }
-function save(){ localStorage.setItem('m3_best',state.best); localStorage.setItem('m3_mode',state.mode); localStorage.setItem('m3_theme',state.theme); localStorage.setItem('m3_sound',state.soundOn?'on':'off'); }
-function load(){ state.best=parseInt(localStorage.getItem('m3_best')||'0',10); state.mode=localStorage.getItem('m3_mode')||'moves'; state.theme=localStorage.getItem('m3_theme')||'system'; state.soundOn=(localStorage.getItem('m3_sound')||'on')==='on'; }
-function applyTheme(){ if(state.theme==='system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme',state.theme); }
-function setStatus(){ el('score').textContent=state.score; el('best').textContent=state.best; el('moves').textContent=state.movesLeft; el('time').textContent=tfmt(state.timeLeft); }
-function tileLabel(t){ let s='фишка '+(t.kind+1); if(t.type===Type.STRIPED_H) s+=', полосатая гор.'; if(t.type===Type.STRIPED_V) s+=', полосатая верт.'; if(t.type===Type.BOMB_3) s+=', бомба 3×3'; if(t.type===Type.COLOR) s+=', бомба цвета'; return s; }
-const palette = [getCSS('--tile1','#E69F00'),getCSS('--tile2','#56B4E9'),getCSS('--tile3','#009E73'),getCSS('--tile4','#F0E442'),getCSS('--tile5','#0072B2'),getCSS('--tile6','#D55E00')];
-function getCSS(name, fallback){ const v=getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return v||fallback; }
-function wait(ms){ return new Promise(r=>setTimeout(r,ms)); }
-function next2frames(){ return new Promise(res=>requestAnimationFrame(()=>requestAnimationFrame(res))); }
+function rng(){ state.rngSeed = (1103515245 * state.rngSeed + 12345) & 0x7fffffff; return state.rngSeed / 0x80000000; }
+function randInt(n){ return Math.floor(rng()*n); }
+function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+function inBounds(r,c){ return r>=0 && c>=0 && r<BOARD_ROWS && c<BOARD_COLS; }
+function areNeighbors(a,b){ return a && b && ((Math.abs(a.r-b.r)===1 && a.c===b.c) || (Math.abs(a.c-b.c)===1 && a.r===b.r)); }
+function wait(ms){ return new Promise(res=>setTimeout(res, ms)); }
+function nextFrame(){ return new Promise(res=>requestAnimationFrame(()=>requestAnimationFrame(res))); }
+function timeFormat(s){ s=Math.max(0,s|0); const m=(s/60|0).toString().padStart(2,'0'); const ss=(s%60).toString().padStart(2,'0'); return `${m}:${ss}`; }
+function setStatus(){ document.getElementById('score').textContent = state.score; document.getElementById('moves').textContent = state.movesLeft; document.getElementById('time').textContent = timeFormat(state.timeLeft); document.getElementById('best').textContent = state.best; }
+function tileColor(kind){
+  const get = k => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
+  const colors = [get('--tile1')||'#E69F00',get('--tile2')||'#56B4E9',get('--tile3')||'#009E73',get('--tile4')||'#F0E442',get('--tile5')||'#0072B2',get('--tile6')||'#D55E00'];
+  return colors[kind % TILE_TYPES];
+}
+function tileAriaLabel(t){
+  let label='фишка '+(t.kind+1);
+  if(t.type===Type.STRIPED_H) label+=', полосатая (гор.)';
+  if(t.type===Type.STRIPED_V) label+=', полосатая (верт.)';
+  if(t.type===Type.BOMB_3) label+=', бомба 3 на 3';
+  if(t.type===Type.COLOR) label+=', бомба цвета';
+  return label;
+}
 
 /* =========================
-   ЗВУК (WebAudio, дружественный к iOS)
+   ЗВУК
 ========================= */
 let audioCtx=null;
-function ensureAudio(){ if(!audioCtx){ try{ audioCtx=new (window.AudioContext||window.webkitAudioContext)(); }catch(_){} } }
-function beep({f=450,d=0.08,w='sine',g=0.03}={}){ if(!state.soundOn||!audioCtx) return; const t=audioCtx.currentTime; const o=audioCtx.createOscillator(); const gi=audioCtx.createGain(); o.type=w; o.frequency.value=f; gi.gain.setValueAtTime(0,t); gi.gain.linearRampToValueAtTime(g,t+0.01); gi.gain.exponentialRampToValueAtTime(0.0001,t+d); o.connect(gi).connect(audioCtx.destination); o.start(t); o.stop(t+d+0.02); }
-const sfx = { click:()=>beep({f:270,w:'triangle',d:0.06}), swap:()=>beep({f:320,w:'sawtooth'}), bad:()=>{beep({f:180,w:'square'}); setTimeout(()=>beep({f:120,w:'square'}),60)}, match:(c=0)=>beep({f:430+c*40,w:'triangle'}), cascade:(n)=>beep({f:520+n*60,w:'sine',d:0.1,g:0.04}), button:()=>beep({f:540,w:'triangle',d:0.05}) };
+function ensureAudio(){ if(!audioCtx){ try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ audioCtx=null; } } }
+function beep({freq=440,dur=0.08,type='sine',gain=0.03}={}){ if(!state.soundOn||!audioCtx) return; const t=audioCtx.currentTime; const o=audioCtx.createOscillator(); const g=audioCtx.createGain(); o.type=type; o.frequency.value=freq; g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(gain,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001, t+dur); o.connect(g).connect(audioCtx.destination); o.start(t); o.stop(t+dur+0.02); }
+const sounds={ click:()=>beep({freq:260,type:'triangle',dur:0.06}), swap:()=>beep({freq:310,type:'sawtooth',dur:0.07}), bad:()=>{beep({freq:180,type:'square',dur:0.08}); setTimeout(()=>beep({freq:120,type:'square',dur:0.08}),70)}, match:(lvl=0)=>beep({freq:420+lvl*40,type:'triangle',dur:0.08}), cascade:(n=1)=>beep({freq:520+(n*60),type:'sine',dur:0.1,gain:0.04}), button:()=>beep({freq:540,type:'triangle',dur:0.05}) };
 
 /* =========================
-   РЕНДЕР (SVG)
+   РЕНДЕР
 ========================= */
-const svgNS='http://www.w3.org/2000/svg';
-const board = el('board');
-
-function createTile(kind,type=Type.NORMAL){ const id=state.idGen++; const t={id,kind,type,r:-1,c:-1,el:null,x:0,y:0,removing:false}; state.tilesById.set(id,t); return t; }
-function mountTile(t,r,c){
-  t.r=r; t.c=c; t.x=c*TILE_SIZE; t.y=r*TILE_SIZE;
-  const g=document.createElementNS(svgNS,'g'); g.classList.add('tile'); g.setAttribute('data-id',t.id); g.setAttribute('role','gridcell'); g.setAttribute('tabindex','0'); g.setAttribute('aria-label',tileLabel(t));
-  const rect=document.createElementNS(svgNS,'rect'); rect.setAttribute('x',4); rect.setAttribute('y',4); rect.setAttribute('rx',14); rect.setAttribute('ry',14); rect.setAttribute('width',TILE_SIZE-8); rect.setAttribute('height',TILE_SIZE-8); rect.setAttribute('fill','#0000');
-  const gem=drawGem(t);
-  const ring=document.createElementNS(svgNS,'rect'); ring.setAttribute('class','ring'); ring.setAttribute('x',2); ring.setAttribute('y',2); ring.setAttribute('rx',16); ring.setAttribute('ry',16); ring.setAttribute('width',TILE_SIZE-4); ring.setAttribute('height',TILE_SIZE-4); ring.setAttribute('stroke','#0072B2'); ring.setAttribute('stroke-width','3'); ring.setAttribute('fill','none');
-  g.append(rect, gem, ring); board.appendChild(g); t.el=g; place(t);
-  attachTileInput(g,t);
+function createTile(kind, type=Type.NORMAL){
+  const id = state.idCounter++;
+  const tile = { id, kind, type, r:-1, c:-1, el:null, x:0, y:0, removing:false };
+  state.tilesById.set(id, tile);
+  return tile;
 }
-function drawGem(t){
-  const g=document.createElementNS(svgNS,'g'); const base=document.createElementNS(svgNS,'circle'); base.setAttribute('cx',TILE_SIZE/2); base.setAttribute('cy',TILE_SIZE/2); base.setAttribute('r',TILE_SIZE*0.28); base.setAttribute('fill', t.type===Type.COLOR ? '#333' : palette[t.kind%TILE_TYPES]); base.setAttribute('stroke','#0005'); base.setAttribute('stroke-width',2); g.appendChild(base);
-  if(t.type===Type.STRIPED_H||t.type===Type.STRIPED_V){
-    for(let i=-2;i<=2;i++){ const r=document.createElementNS(svgNS,'rect'); if(t.type===Type.STRIPED_H){ r.setAttribute('x', TILE_SIZE*0.2*(i+3)-6); r.setAttribute('y', TILE_SIZE*0.28-6); r.setAttribute('width',12); r.setAttribute('height',12); r.setAttribute('transform',`rotate(45 ${TILE_SIZE/2} ${TILE_SIZE/2})`); } else { r.setAttribute('x', TILE_SIZE*0.28-6); r.setAttribute('y', TILE_SIZE*0.2*(i+3)-6); r.setAttribute('width',12); r.setAttribute('height',12); r.setAttribute('transform',`rotate(45 ${TILE_SIZE/2} ${TILE_SIZE/2})`); } r.setAttribute('fill','#fff'); r.setAttribute('opacity','0.75'); g.appendChild(r); }
+function drawGem(tile){
+  const g = document.createElementNS(svgNS,'g');
+  const color = tile.type===Type.COLOR ? '#333' : tileColor(tile.kind);
+  const R = state.tilePx*0.28;
+  const circle = document.createElementNS(svgNS,'circle');
+  circle.setAttribute('cx', state.tilePx/2);
+  circle.setAttribute('cy', state.tilePx/2);
+  circle.setAttribute('r', R);
+  circle.setAttribute('fill', color);
+  circle.setAttribute('stroke', '#0005');
+  circle.setAttribute('stroke-width', 2);
+  g.appendChild(circle);
+
+  if(tile.type===Type.STRIPED_H || tile.type===Type.STRIPED_V){
+    for(let i=-2;i<=2;i++){
+      const rect = document.createElementNS(svgNS,'rect');
+      if(tile.type===Type.STRIPED_H){
+        rect.setAttribute('x', state.tilePx*0.2*(i+3)-6);
+        rect.setAttribute('y', state.tilePx*0.28-6);
+        rect.setAttribute('width', 12); rect.setAttribute('height', 12);
+        rect.setAttribute('transform', `rotate(45 ${state.tilePx/2} ${state.tilePx/2})`);
+      }else{
+        rect.setAttribute('x', state.tilePx*0.28-6);
+        rect.setAttribute('y', state.tilePx*0.2*(i+3)-6);
+        rect.setAttribute('width', 12); rect.setAttribute('height', 12);
+        rect.setAttribute('transform', `rotate(45 ${state.tilePx/2} ${state.tilePx/2})`);
+      }
+      rect.setAttribute('fill','#fff'); rect.setAttribute('opacity','0.7'); g.appendChild(rect);
+    }
   }
-  if(t.type===Type.BOMB_3){ const sq=document.createElementNS(svgNS,'rect'); sq.setAttribute('x',TILE_SIZE/2-TILE_SIZE*0.18); sq.setAttribute('y',TILE_SIZE/2-TILE_SIZE*0.18); sq.setAttribute('width',TILE_SIZE*0.36); sq.setAttribute('height',TILE_SIZE*0.36); sq.setAttribute('rx',6); sq.setAttribute('fill','#fff'); sq.setAttribute('opacity','0.9'); g.appendChild(sq); }
-  if(t.type===Type.COLOR){ for(let i=0;i<6;i++){ const st=document.createElementNS(svgNS,'circle'); const a=i*Math.PI*2/6; st.setAttribute('cx',TILE_SIZE/2+Math.cos(a)*TILE_SIZE*0.18); st.setAttribute('cy',TILE_SIZE/2+Math.sin(a)*TILE_SIZE*0.18); st.setAttribute('r',3); st.setAttribute('fill','#fff'); g.appendChild(st);} }
+  if(tile.type===Type.BOMB_3){
+    const sq = document.createElementNS(svgNS,'rect');
+    const s = state.tilePx*0.36;
+    sq.setAttribute('x', state.tilePx/2 - s/2); sq.setAttribute('y', state.tilePx/2 - s/2);
+    sq.setAttribute('width', s); sq.setAttribute('height', s); sq.setAttribute('rx', 6);
+    sq.setAttribute('fill', '#fff'); sq.setAttribute('opacity','0.85'); g.appendChild(sq);
+  }
+  if(tile.type===Type.COLOR){
+    for(let i=0;i<6;i++){
+      const star = document.createElementNS(svgNS,'circle'); const ang=i*Math.PI*2/6;
+      star.setAttribute('cx', state.tilePx/2 + Math.cos(ang)*state.tilePx*0.18);
+      star.setAttribute('cy', state.tilePx/2 + Math.sin(ang)*state.tilePx*0.18);
+      star.setAttribute('r', 3); star.setAttribute('fill','#fff'); g.appendChild(star);
+    }
+  }
   return g;
 }
-function refreshGem(t){ if(!t.el) return; const old=t.el.children[1]; t.el.removeChild(old); t.el.insertBefore(drawGem(t), t.el.children[1]); t.el.setAttribute('aria-label',tileLabel(t)); }
-function place(t){ const x=t.c*TILE_SIZE, y=t.r*TILE_SIZE; t.x=x; t.y=y; t.el.style.setProperty('--x',x+'px'); t.el.style.setProperty('--y',y+'px'); t.el.style.transform=`translate(${x}px, ${y}px)`; }
-function removeTile(t){ t.removing=true; t.el.style.opacity='0'; setTimeout(()=>{ if(t.el?.parentNode===board) board.removeChild(t.el); t.el=null; }, TRANSITION_MS); }
+function mountTile(tile, r, c){
+  tile.r=r; tile.c=c; tile.x=c*state.tilePx; tile.y=r*state.tilePx;
+  const g = document.createElementNS(svgNS,'g');
+  g.classList.add('tile');
+  g.setAttribute('data-id', tile.id);
+  g.setAttribute('role','gridcell');
+  g.setAttribute('tabindex','0');
+  g.setAttribute('aria-label', tileAriaLabel(tile));
+  const bg = document.createElementNS(svgNS,'rect');
+  bg.setAttribute('x',4); bg.setAttribute('y',4);
+  bg.setAttribute('rx', 14); bg.setAttribute('ry',14);
+  bg.setAttribute('width', state.tilePx-8); bg.setAttribute('height', state.tilePx-8);
+  bg.setAttribute('fill','#0000');
+
+  const gem = drawGem(tile);
+  const ring = document.createElementNS(svgNS,'rect');
+  ring.setAttribute('class','focus-ring'); ring.setAttribute('x',2); ring.setAttribute('y',2);
+  ring.setAttribute('rx',16); ring.setAttribute('ry',16);
+  ring.setAttribute('width', state.tilePx-4); ring.setAttribute('height', state.tilePx-4);
+  ring.setAttribute('stroke','#0072B2'); ring.setAttribute('stroke-width','3'); ring.setAttribute('fill','none');
+
+  g.append(bg, gem, ring);
+  boardSVG.appendChild(g);
+  tile.el = g;
+  positionTile(tile);
+  attachTileEvents(g, tile);
+}
+function refreshGem(tile){
+  if(!tile.el) return;
+  const old = tile.el.children[1];
+  tile.el.removeChild(old);
+  tile.el.insertBefore(drawGem(tile), tile.el.children[1]);
+  tile.el.setAttribute('aria-label', tileAriaLabel(tile));
+}
+function positionTile(tile){
+  const x = tile.c * state.tilePx;
+  const y = tile.r * state.tilePx;
+  tile.x=x; tile.y=y;
+  tile.el.style.setProperty('--x', x+'px');
+  tile.el.style.setProperty('--y', y+'px');
+  tile.el.style.transform = `translate(${x}px, ${y}px)`;
+}
+function removeTile(tile){
+  tile.removing = true;
+  tile.el.style.opacity = '0';
+  setTimeout(()=>{ if(tile.el && tile.el.parentNode===boardSVG) boardSVG.removeChild(tile.el); tile.el=null; }, TRANSITION_MS);
+}
 
 /* =========================
-   ГЕНЕРАЦИЯ ПОЛЯ
+   ГЕНЕРАЦИЯ ДОСКИ
 ========================= */
-function emptyBoard(){ state.board = Array.from({length:BOARD_ROWS},()=>Array(BOARD_COLS).fill(null)); }
-function randKind(){ return rint(TILE_TYPES); }
+function emptyBoard(){
+  state.board = Array.from({length:BOARD_ROWS},()=>Array(BOARD_COLS).fill(null));
+}
+function randomKind(){ return Math.floor(rng()*TILE_TYPES); }
 
 function generateBoard(){
   emptyBoard();
   for(let r=0;r<BOARD_ROWS;r++){
     for(let c=0;c<BOARD_COLS;c++){
-      let k, tries=0;
+      let kind, attempts=0;
       do{
-        k=randKind(); tries++;
-      }while((c>=2 && state.board[r][c-1]?.kind===k && state.board[r][c-2]?.kind===k) ||
-             (r>=2 && state.board[r-1][c]?.kind===k && state.board[r-2][c]?.kind===k));
-      const t=createTile(k); state.board[r][c]=t; mountTile(t,r,c);
+        kind = randomKind(); attempts++;
+      }while(
+        (c>=2 && state.board[r][c-1]?.kind===kind && state.board[r][c-2]?.kind===kind) ||
+        (r>=2 && state.board[r-1][c]?.kind===kind && state.board[r-2][c]?.kind===kind)
+      );
+      const t = createTile(kind);
+      state.board[r][c]=t;
+      mountTile(t,r,c);
     }
   }
+  // Гарантируем наличие хода
   let guard=0;
-  while(!findAnyMove() && guard<50){ reshuffle(); guard++; }
+  while(!findAnyPossibleMove() && guard<50){ reshuffleKindsNoMatches(); guard++; }
 }
-function reshuffle(){
+
+function reshuffleKindsNoMatches(){
   for(let r=0;r<BOARD_ROWS;r++){
     for(let c=0;c<BOARD_COLS;c++){
-      let k; do{
-        k=randKind();
-      }while((c>=2 && state.board[r][c-1]?.kind===k && state.board[r][c-2]?.kind===k) ||
-             (r>=2 && state.board[r-1][c]?.kind===k && state.board[r-2][c]?.kind===k));
-      const t=state.board[r][c]; t.kind=k; t.type=Type.NORMAL; refreshGem(t);
+      let kind;
+      let tries=0;
+      do{
+        kind = randomKind(); tries++;
+      }while(
+        (c>=2 && state.board[r][c-1]?.kind===kind && state.board[r][c-2]?.kind===kind) ||
+        (r>=2 && state.board[r-1][c]?.kind===kind && state.board[r-2][c]?.kind===kind)
+      );
+      const t = state.board[r][c];
+      t.kind = kind; t.type=Type.NORMAL;
+      refreshGem(t);
     }
   }
 }
 
 /* =========================
-   ПОИСК СОВПАДЕНИЙ
+   ПОИСК СОВПАДЕНИЙ И ГРУПП
 ========================= */
-function findMatches(b=state.board){
-  const mark=new Set(); const groups=[];
-  // горизонтальные
+function findMatches(board=state.board){
+  const matched = new Set();
+  // горизонтали
   for(let r=0;r<BOARD_ROWS;r++){
     let run=1;
     for(let c=1;c<=BOARD_COLS;c++){
-      const a=b[r][c-1], x=(c<BOARD_COLS)?b[r][c]:null;
-      const same = x && a && a.type!==Type.COLOR && x.type!==Type.COLOR && a.kind===x.kind;
-      if(same) run++; else { if(run>=3){ for(let k=c-run;k<c;k++) mark.add(`${r},${k}`); groups.push({cells:Array.from({length:run},(_,i)=>({r,c:c-run+i})), dir:'h'}); } run=1; }
+      const curr = c<BOARD_COLS ? board[r][c] : null;
+      const prev = board[r][c-1];
+      const same = curr && prev && curr.type!==Type.COLOR && prev.type!==Type.COLOR && curr.kind===prev.kind;
+      if(same) run++; else { if(run>=3) for(let k=c-run;k<c;k++) matched.add(`${r},${k}`); run=1; }
     }
   }
-  // вертикальные
+  // вертикали
   for(let c=0;c<BOARD_COLS;c++){
     let run=1;
     for(let r=1;r<=BOARD_ROWS;r++){
-      const a=b[r-1]?.[c], x=(r<BOARD_ROWS)?b[r][c]:null;
-      const same = x && a && a.type!==Type.COLOR && x.type!==Type.COLOR && a.kind===x.kind;
-      if(same) run++; else { if(run>=3){ for(let k=r-run;k<r;k++) mark.add(`${k},${c}`); groups.push({cells:Array.from({length:run},(_,i)=>({r:r-run+i,c})), dir:'v'}); } run=1; }
+      const curr = r<BOARD_ROWS ? board[r][c] : null;
+      const prev = board[r-1]?.[c];
+      const same = curr && prev && curr.type!==Type.COLOR && prev.type!==Type.COLOR && curr.kind===prev.kind;
+      if(same) run++; else { if(run>=3) for(let k=r-run;k<r;k++) matched.add(`${k},${c}`); run=1; }
     }
   }
-  // склеиваем пересечения для T/L
-  const merged=[]; const used=new Set();
-  for(let i=0;i<groups.length;i++){
-    if(used.has(i)) continue;
-    let set = new Set(groups[i].cells.map(p=>`${p.r},${p.c}`));
-    let dirs= new Set([groups[i].dir]);
-    for(let j=i+1;j<groups.length;j++){
-      if(used.has(j)) continue;
-      const g2=groups[j];
-      if(g2.cells.some(p=>set.has(`${p.r},${p.c}`))){
-        g2.cells.forEach(p=>set.add(`${p.r},${p.c}`));
-        dirs.add(g2.dir); used.add(j);
+  // Группы (объединяем пересечения для T/L)
+  const groups=[]; const used=new Set();
+  const cells=[...matched].map(s=>s.split(',').map(Number).reduce((o,n,i)=>{if(i===0)o.r=n;else o.c=n; return o;},{}));
+  // Построим горизонтальные и вертикальные подцепочки, затем сольём
+  function pushRuns(dir){
+    if(dir==='h'){
+      for(let r=0;r<BOARD_ROWS;r++){
+        let c=0; while(c<BOARD_COLS){
+          if(matched.has(`${r},${c}`)){ let k=c; const arr=[]; while(k<BOARD_COLS && matched.has(`${r},${k}`)){ arr.push({r,c:k}); k++; } if(arr.length>=3) groups.push({cells:arr, dir:'h'}); c=k; } else c++;
+        }
+      }
+    }else{
+      for(let c=0;c<BOARD_COLS;c++){
+        let r=0; while(r<BOARD_ROWS){
+          if(matched.has(`${r},${c}`)){ let k=r; const arr=[]; while(k<BOARD_ROWS && matched.has(`${k},${c}`)){ arr.push({r:k,c}); k++; } if(arr.length>=3) groups.push({cells:arr, dir:'v'}); r=k; } else r++;
+        }
       }
     }
-    merged.push({cells:[...set].map(s=>{const [r,c]=s.split(',').map(Number); return {r,c};}), dirs});
   }
-  return merged;
+  pushRuns('h'); pushRuns('v');
+  const combined=[]; const gUsed=new Set();
+  for(let i=0;i<groups.length;i++){
+    if(gUsed.has(i)) continue;
+    const set=new Set(groups[i].cells.map(p=>`${p.r},${p.c}`));
+    const dirs=new Set([groups[i].dir]);
+    for(let j=i+1;j<groups.length;j++){
+      if(gUsed.has(j)) continue;
+      const overlap = groups[j].cells.some(p=>set.has(`${p.r},${p.c}`));
+      if(overlap){ groups[j].cells.forEach(p=>set.add(`${p.r},${p.c}`)); dirs.add(groups[j].dir); gUsed.add(j); }
+    }
+    combined.push({cells:[...set].map(s=>{const [r,c]=s.split(',').map(Number); return {r,c};}), dirs});
+  }
+  return combined;
 }
 
 /* =========================
    ВОЗМОЖНЫЕ ХОДЫ / ПОДСКАЗКА
 ========================= */
-function swapCreatesMatch(a,b){
-  const cp = state.board.map(row=>row.slice());
-  const tA=cp[a.r][a.c], tB=cp[b.r][b.c]; cp[a.r][a.c]=tB; cp[b.r][b.c]=tA;
-  return findMatches(cp).length>0;
+function checkSwapCreatesMatch(a,b){
+  const board = state.board.map(row=>row.slice());
+  const tA = board[a.r][a.c], tB = board[b.r][b.c];
+  board[a.r][a.c] = tB; board[b.r][b.c] = tA;
+  const matches = findMatches(board);
+  return matches.length>0;
 }
-function findAnyMove(){
-  for(let r=0;r<BOARD_ROWS;r++) for(let c=0;c<BOARD_COLS;c++){
-    const a={r,c};
-    for(const b of [{r,c:c+1},{r:r+1,c}]) if(inB(b.r,b.c) && swapCreatesMatch(a,b)) return [a,b];
+function findAnyPossibleMove(){
+  for(let r=0;r<BOARD_ROWS;r++){
+    for(let c=0;c<BOARD_COLS;c++){
+      const a={r,c};
+      for(const b of [{r,c:c+1},{r:r+1,c}]){
+        if(inBounds(b.r,b.c) && checkSwapCreatesMatch(a,b)) return [a,b];
+      }
+    }
   }
   return null;
 }
 function scheduleHint(){
   clearHint();
-  state.hintTimer=setTimeout(()=>{
-    const mv=findAnyMove();
-    if(mv){ state.hintPair=mv;
-      const [a,b]=mv; state.board[a.r][a.c]?.el.classList.add('hint'); state.board[b.r][b.c]?.el.classList.add('hint'); }
+  state.hintTimer = setTimeout(()=>{
+    const mv = findAnyPossibleMove();
+    if(mv){
+      const [a,b]=mv; const ta=state.board[a.r][a.c]; const tb=state.board[b.r][b.c];
+      ta?.el.classList.add('hint'); tb?.el.classList.add('hint'); state.hintPair = mv;
+    }
   }, HINT_DELAY_MS);
 }
 function clearHint(){
@@ -379,158 +543,447 @@ function clearHint(){
 }
 
 /* =========================
+   СЧЁТ / ПАУЭРУПЫ
+========================= */
+function cellsToSet(cells){ const s=new Set(); for(const p of cells) s.add(`${p.r},${p.c}`); return s; }
+function planPowerups(groups, swapInfo){
+  const toRemove = new Set();
+  const create = [];
+  for(const g of groups){
+    g.cells.forEach(p=>toRemove.add(`${p.r},${p.c}`));
+    const rcnt=new Map(), ccnt=new Map();
+    for(const p of g.cells){ rcnt.set(p.r,(rcnt.get(p.r)||0)+1); ccnt.set(p.c,(ccnt.get(p.c)||0)+1); }
+    const isT = (Array.from(rcnt.values()).some(v=>v>=3) && Array.from(ccnt.values()).some(v=>v>=3));
+    const inter = g.cells.find(p=> rcnt.get(p.r)>=3 && ccnt.get(p.c)>=3 ) || g.cells[(g.cells.length/2)|0];
+
+    let target = inter;
+    if(swapInfo){
+      for(const cand of [swapInfo.a, swapInfo.b]){
+        if(g.cells.some(p=>p.r===cand.r && p.c===cand.c)){ target=cand; break; }
+      }
+    }
+    const sample = state.board[target.r][target.c];
+    const size = g.cells.length;
+    if(isT){ create.push({r:target.r, c:target.c, type:Type.BOMB_3, kind:sample.kind}); }
+    else if(size>=5){ create.push({r:target.r, c:target.c, type:Type.COLOR, kind:sample.kind}); }
+    else if(size===4){
+      const dir = g.dirs.has('h') && !g.dirs.has('v') ? 'h' : (g.dirs.has('v') && !g.dirs.has('h') ? 'v' : 'h');
+      create.push({r:target.r, c:target.c, type: dir==='h'?Type.STRIPED_H:Type.STRIPED_V, kind:sample.kind});
+    }
+  }
+  return {toRemove, create};
+}
+function collectScore(groups, cascadeLevel){
+  let gained=0;
+  for(const g of groups){ const size=g.cells.length; if(size>=3) gained += SCORE_BASE3 + (size-3)*SCORE_EXTRA; }
+  return gained * (1 + cascadeLevel);
+}
+function clearCells(set){
+  const cleared=[];
+  for(const key of set){
+    const [r,c]=key.split(',').map(Number);
+    const t = state.board[r][c];
+    if(t && !t.removing){ removeTile(t); state.board[r][c]=null; cleared.push({r,c,t}); }
+  }
+  return cleared;
+}
+function activateStriped(tile){
+  const s=new Set();
+  if(tile.type===Type.STRIPED_H) for(let c=0;c<BOARD_COLS;c++) s.add(`${tile.r},${c}`);
+  else for(let r=0;r<BOARD_ROWS;r++) s.add(`${r},${tile.c}`);
+  return s;
+}
+function activateBomb3(tile){
+  const s=new Set();
+  for(let dr=-1;dr<=1;dr++) for(let dc=-1;dc<=1;dc++){ const r=tile.r+dr, c=tile.c+dc; if(inBounds(r,c)) s.add(`${r},${c}`); }
+  return s;
+}
+function activateColorBomb(kind){
+  const s=new Set();
+  for(let r=0;r<BOARD_ROWS;r++) for(let c=0;c<BOARD_COLS;c++){ const t=state.board[r][c]; if(t && t.type!==Type.COLOR && t.kind===kind) s.add(`${r},${c}`); }
+  return s;
+}
+function activateAllOfKindTo(type, kind){
+  const specials=[];
+  for(let r=0;r<BOARD_ROWS;r++) for(let c=0;c<BOARD_COLS;c++){ const t=state.board[r][c]; if(t && t.type!==Type.COLOR && t.kind===kind){ t.type=type; refreshGem(t); specials.push(t); } }
+  const cleared=new Set();
+  for(const t of specials){
+    const s = (t.type===Type.STRIPED_H||t.type===Type.STRIPED_V) ? activateStriped(t) : activateBomb3(t);
+    s.forEach(k=>cleared.add(k));
+  }
+  return cleared;
+}
+
+/* =========================
    ГРАВИТАЦИЯ/РЕФИЛЛ
 ========================= */
-async function gravityRefill(){
+async function applyGravityAndRefill(){
   let moved=false;
   for(let c=0;c<BOARD_COLS;c++){
-    let p=BOARD_ROWS-1;
+    let ptr=BOARD_ROWS-1;
     for(let r=BOARD_ROWS-1;r>=0;r--){
       const t=state.board[r][c];
-      if(t){ if(r!==p){ state.board[p][c]=t; t.r=p; place(t); state.board[r][c]=null; moved=true; } p--; }
+      if(t){ if(r!==ptr){ state.board[ptr][c]=t; t.r=ptr; positionTile(t); state.board[r][c]=null; moved=true; } ptr--; }
     }
-    for(let r=p;r>=0;r--){
-      const t=createTile(randKind()); state.board[r][c]=t; mountTile(t,r,c);
-      t.el.style.transform=`translate(${t.x}px, ${t.y - (p+1-r+1)*TILE_SIZE}px)`; // появление сверху
-      await next2frames(); place(t); moved=true;
+    for(let r=ptr;r>=0;r--){
+      const t=createTile(randomKind());
+      state.board[r][c]=t;
+      mountTile(t,r,c);
+      t.el.style.transform = `translate(${t.x}px, ${t.y - state.tilePx*(ptr+1-r)}px)`; // из-за экрана сверху
+      await nextFrame(); positionTile(t); moved=true;
     }
   }
   if(moved) await wait(TRANSITION_MS+10);
 }
 
 /* =========================
-   БОНУСЫ / ОЧКИ
+   ОБРАБОТКА МАТЧЕЙ/КАСКАДОВ
 ========================= */
-function scoreForGroups(groups,cascade){ let s=0; for(const g of groups){ const n=g.cells.length; if(n>=3) s += SCORE_BASE3 + (n-3)*SCORE_EXTRA; } return s*(1+cascade); }
-
-function planPowerups(groups, swapInfo){
-  const toRemove=new Set(); const create=[];
-  for(const g of groups){ g.cells.forEach(p=>toRemove.add(`${p.r},${p.c}`));
-    const size=g.cells.length;
-    const rc=new Map(), cc=new Map(); g.cells.forEach(p=>{rc.set(p.r,(rc.get(p.r)||0)+1); cc.set(p.c,(cc.get(p.c)||0)+1);});
-    const isT = Array.from(rc.values()).some(v=>v>=3) && Array.from(cc.values()).some(v=>v>=3);
-    let target = g.cells[ (g.cells.length/2)|0 ];
-    if(swapInfo){ for(const cand of [swapInfo.a, swapInfo.b]) if(g.cells.some(p=>p.r===cand.r && p.c===cand.c)){ target=cand; break; } }
-    const sample = state.board[target.r][target.c];
-    if(isT){ create.push({r:target.r,c:target.c,type:Type.BOMB_3,kind:sample.kind}); }
-    else if(size>=5){ create.push({r:target.r,c:target.c,type:Type.COLOR,kind:sample.kind}); }
-    else if(size===4){
-      const dir = g.dirs.has('h') && !g.dirs.has('v') ? 'h' : (g.dirs.has('v') && !g.dirs.has('h') ? 'v' : 'h');
-      create.push({r:target.r,c:target.c,type: dir==='h'?Type.STRIPED_H:Type.STRIPED_V, kind:sample.kind});
-    }
+async function resolveMatchesLoop(initialGroups, swapInfo){
+  let groups=initialGroups; state.cascade=0;
+  while(groups && groups.length){
+    const gain = collectScore(groups, state.cascade); state.score += gain;
+    const {toRemove, create} = planPowerups(groups, swapInfo);
+    const reserved = new Set(create.map(p=>`${p.r},${p.c}`));
+    const actual = new Set([...toRemove].filter(k=>!reserved.has(k)));
+    sounds.match(state.cascade);
+    clearCells(actual);
+    for(const cr of create){ const t=state.board[cr.r][cr.c]; if(!t) continue; t.type=cr.type; refreshGem(t); state.score += SCORE_POWERUP_ACT; }
+    setStatus();
+    await wait(TRANSITION_MS);
+    await applyGravityAndRefill();
+    state.cascade++; sounds.cascade(state.cascade);
+    groups=findMatches();
   }
-  return {toRemove, create};
+  updateAfterMove();
 }
-function clearSet(set){ const cleared=[]; set.forEach(k=>{ const [r,c]=k.split(',').map(Number); const t=state.board[r][c]; if(t && !t.removing){ removeTile(t); state.board[r][c]=null; cleared.push({r,c,t}); }}); return cleared; }
-function stripEffect(t){ const s=new Set(); if(t.type===Type.STRIPED_H){ for(let c=0;c<BOARD_COLS;c++) s.add(`${t.r},${c}`); } else { for(let r=0;r<BOARD_ROWS;r++) s.add(`${r},${t.c}`); } return s; }
-function bomb3Effect(t){ const s=new Set(); for(let dr=-1;dr<=1;dr++) for(let dc=-1;dc<=1;dc++){ const r=t.r+dr,c=t.c+dc; if(inB(r,c)) s.add(`${r},${c}`);} return s; }
-function colorEffect(kind){ const s=new Set(); for(let r=0;r<BOARD_ROWS;r++) for(let c=0;c<BOARD_COLS;c++){ const t=state.board[r][c]; if(t && t.type!==Type.COLOR && t.kind===kind) s.add(`${r},${c}`);} return s; }
-function convertAllOfKind(targetType, kind){ const specials=[]; for(let r=0;r<BOARD_ROWS;r++) for(let c=0;c<BOARD_COLS;c++){ const t=state.board[r][c]; if(t && t.type!==Type.COLOR && t.kind===kind){ t.type=targetType; refreshGem(t); specials.push(t); } } const set=new Set(); for(const t of specials){ const fx = (t.type===Type.BOMB_3)? bomb3Effect(t) : stripEffect(t); fx.forEach(k=>set.add(k)); } return set; }
+async function resolveAllCascades(){
+  let groups=findMatches(); state.cascade=0;
+  while(groups.length){
+    const gain=collectScore(groups, state.cascade); state.score+=gain; setStatus();
+    const {toRemove, create} = planPowerups(groups, null);
+    const reserved = new Set(create.map(p=>`${p.r},${p.c}`));
+    const actual = new Set([...toRemove].filter(k=>!reserved.has(k)));
+    clearCells(actual);
+    for(const cr of create){ const t=state.board[cr.r][cr.c]; if(!t) continue; t.type=cr.type; refreshGem(t); state.score += SCORE_POWERUP_ACT; }
+    await wait(TRANSITION_MS);
+    await applyGravityAndRefill();
+    state.cascade++; groups=findMatches();
+  }
+}
 
 /* =========================
-   ВВОД: ТАЧ-СВАЙП (Pointer Events) + КЛИК + КЛАВИАТУРА
+   ОБМЕН/ВВОД (КЛИК, КЛАВИША, СВАЙП)
 ========================= */
-function attachTileInput(g,t){
-  // Pointer Events обеспечивают единый ввод для iOS тача и мыши
-  g.addEventListener('pointerdown', onPointerDown, {passive:false});
-  g.addEventListener('click', (e)=>{ if(state.inputLocked||state.paused) return; ensureAudio(); selectOrSwap(t); scheduleHint(); });
-  function onPointerDown(e){
-    if(state.inputLocked||state.paused) return;
+function attachTileEvents(el, tile){
+  // Pointer Events: однообразно для мыши и тача; важно: touch-action: none на .board
+  el.addEventListener('pointerdown', e=>{
+    if(state.paused || state.inputLocked) return;
     ensureAudio();
-    // Захватываем указатель, чтобы получать move/up даже при выходе
-    g.setPointerCapture?.(e.pointerId);
-    e.preventDefault();
-    state.drag.id = e.pointerId;
-    state.drag.startRC = {r:t.r, c:t.c};
-    state.drag.startX = e.clientX; state.drag.startY = e.clientY;
-    state.drag.didSwap = false;
-    window.addEventListener('pointermove', onPointerMove, {passive:false});
-    window.addEventListener('pointerup', onPointerUp, {passive:false, once:true});
-    window.addEventListener('pointercancel', onPointerUp, {passive:false, once:true});
-    clearHint();
-  }
-  function onPointerMove(e){
-    if(e.pointerId!==state.drag.id || state.inputLocked) return;
+    const rect = boardSVG.getBoundingClientRect();
+    state.drag.active=true; state.drag.id=tile.id; state.drag.startX=e.clientX; state.drag.startY=e.clientY; state.drag.moved=false;
+    el.setPointerCapture(e.pointerId);
+  });
+  el.addEventListener('pointermove', async e=>{
+    if(!state.drag.active || state.inputLocked) return;
     const dx = e.clientX - state.drag.startX;
     const dy = e.clientY - state.drag.startY;
-    const TH = 18; // порог — комфортно для тача
-    if(!state.drag.didSwap && (Math.abs(dx)>TH || Math.abs(dy)>TH)){
-      const primary = Math.abs(dx) >= Math.abs(dy) ? (dx>0?{dr:0,dc:1}:{dr:0,dc:-1}) : (dy>0?{dr:1,dc:0}:{dr:-1,dc:0});
-      const a = state.drag.startRC;
-      const b = {r:a.r+primary.dr, c:a.c+primary.dc};
-      if(inB(b.r,b.c)){
-        state.drag.didSwap = true;
-        performSwap(a,b).then(()=>{
-          // после свопа можно заново показывать подсказку
-          scheduleHint();
-        });
+    const th = Math.max(12, state.tilePx*0.25); // порог срабатывания
+    if(!state.drag.moved && (Math.abs(dx)>th || Math.abs(dy)>th)){
+      state.drag.moved=true;
+      let dir;
+      if(Math.abs(dx) > Math.abs(dy)) dir = dx>0 ? 'right' : 'left';
+      else dir = dy>0 ? 'down' : 'up';
+      const t = state.tilesById.get(state.drag.id);
+      if(!t) return;
+      const a={r:t.r, c:t.c};
+      const b = dir==='right'? {r:t.r,c:t.c+1} : dir==='left'? {r:t.r,c:t.c-1} : dir==='down'? {r:t.r+1,c:t.c} : {r:t.r-1,c:t.c};
+      if(inBounds(b.r,b.c)){
+        await performSwap(a,b);
+        scheduleHint();
+      }else{
+        // короткий шейк
+        t.el.classList.add('shake'); setTimeout(()=>t.el.classList.remove('shake'),250);
       }
+      state.drag.active=false; state.drag.id=null;
     }
-  }
-  function onPointerUp(e){
-    window.removeEventListener('pointermove', onPointerMove, {passive:false});
-    if(!state.drag.didSwap && state.drag.startRC){ // это был тап
-      selectOrSwap(t);
-      scheduleHint();
+  });
+  el.addEventListener('pointerup', e=>{
+    if(state.drag.active && !state.drag.moved){
+      // трактуем как клик/выбор
+      selectOrSwap(tile);
     }
-    state.drag.id=null; state.drag.startRC=null; state.drag.didSwap=false;
-  }
+    state.drag.active=false; state.drag.id=null;
+  });
+  // Клик мышью для десктопа
+  el.addEventListener('click', e=>{
+    if(state.drag.moved) return; // уже обработано свайпом
+    if(state.paused || state.inputLocked) return;
+    selectOrSwap(tile);
+  });
 }
 
-function setSelected(t){
+function setSelected(tile){
   document.querySelectorAll('.tile.selected').forEach(n=>n.classList.remove('selected'));
-  state.selected = t ? {r:t.r, c:t.c} : null;
-  if(t) t.el.classList.add('selected');
+  if(tile){ state.selected={r:tile.r,c:tile.c}; tile.el.classList.add('selected'); } else state.selected=null;
 }
-async function badSwapFX(a,b){
-  sfx.bad();
-  a.el.classList.add('shake'); b.el.classList.add('shake');
+async function badSwapAnimation(aTile,bTile){
+  sounds.bad();
+  aTile.el.classList.add('shake'); bTile.el.classList.add('shake');
   await wait(250);
-  a.el.classList.remove('shake'); b.el.classList.remove('shake');
+  aTile.el.classList.remove('shake'); bTile.el.classList.remove('shake');
 }
-async function selectOrSwap(t){
-  if(!state.selected){ setSelected(t); sfx.click(); return; }
-  const a=state.selected, b={r:t.r,c:t.c};
-  if(a.r===b.r && a.c===b.c){ setSelected(null); return; }
-  if(Math.abs(a.r-b.r)+Math.abs(a.c-b.c)!==1){ setSelected(t); return; } // не соседи → пере-выбор
-  setSelected(null);
-  await performSwap(a,b);
-}
-
 async function performSwap(a,b){
-  const A=state.board[a.r][a.c], B=state.board[b.r][b.c];
+  const A=state.board[a.r][a.c]; const B=state.board[b.r][b.c];
   if(!A||!B) return false;
-  state.inputLocked=true; sfx.swap();
-  // визуально
+  state.inputLocked=true; sounds.swap();
   const ax=A.x, ay=A.y, bx=B.x, by=B.y;
-  A.el.style.transform=`translate(${bx}px, ${by}px)`;
-  B.el.style.transform=`translate(${ax}px, ${ay}px)`;
+  A.el.style.transform=`translate(${bx}px, ${by}px)`; B.el.style.transform=`translate(${ax}px, ${ay}px)`;
   await wait(TRANSITION_MS);
-  // логически
-  state.board[a.r][a.c]=B; B.r=a.r; B.c=a.c; place(B);
-  state.board[b.r][b.c]=A; A.r=b.r; A.c=b.c; place(A);
+  state.board[a.r][a.c]=B; B.r=a.r; B.c=a.c; positionTile(B);
+  state.board[b.r][b.c]=A; A.r=b.r; A.c=b.c; positionTile(A);
 
-  // спец-комбо без матча
-  const combo = await trySpecialCombo(A,B);
-  if(combo){ state.inputLocked=false; return true; }
+  const special = await trySpecialCombo(A,B);
+  if(special.done){ state.inputLocked=false; return true; }
 
-  const matches=findMatches();
-  if(!matches.length){
+  const matches = findMatches();
+  if(matches.length===0){
     // откат
-    await wait(10);
-    state.board[a.r][a.c]=A; A.r=a.r; A.c=a.c; place(A);
-    state.board[b.r][b.c]=B; B.r=b.r; B.c=b.c; place(B);
+    await wait(5);
+    state.board[a.r][a.c]=A; A.r=a.r; A.c=a.c; positionTile(A);
+    state.board[b.r][b.c]=B; B.r=b.r; B.c=b.c; positionTile(B);
     await wait(TRANSITION_MS);
-    await badSwapFX(A,B);
+    await badSwapAnimation(A,B);
     state.inputLocked=false;
     return false;
   }else{
-    await resolveMatchesLoop(matches,{a,b});
+    await resolveMatchesLoop(matches, {a,b});
     state.inputLocked=false;
     return true;
   }
 }
-
 async function trySpecialCombo(A,B){
-  const aSpec=A.type!==Type.NORMAL, bSpec=B.type!==Type.NORMAL;
-  // color + color
+  const aSpec = A.type!==Type.NORMAL;
+  const bSpec = B.type!==Type.NORMAL;
+  // Две цветовые бомбы — очистить всё
+  if(A.type===Type.COLOR && B.type===Type.COLOR){
+    const cleared=new Set(); for(let r=0;r<BOARD_ROWS;r++) for(let c=0;c<BOARD_COLS;c++) cleared.add(`${r},${c}`);
+    state.score += SCORE_POWERUP_ACT*2; sounds.cascade(2); clearCells(cleared);
+    await wait(TRANSITION_MS); await applyGravityAndRefill(); await resolveAllCascades(); updateAfterMove(); return {done:true};
+  }
+  // Цветовая + любая
+  if(A.type===Type.COLOR && B.type!==Type.COLOR){
+    const cleared = activateColorBomb(B.kind); state.score += SCORE_POWERUP_ACT; sounds.cascade(2); clearCells(cleared);
+    await wait(TRANSITION_MS); await applyGravityAndRefill(); await resolveAllCascades(); updateAfterMove(); return {done:true};
+  }
+  if(B.type===Type.COLOR && A.type!==Type.COLOR){
+    const cleared = activateColorBomb(A.kind); state.score += SCORE_POWERUP_ACT; sounds.cascade(2); clearCells(cleared);
+    await wait(TRANSITION_MS); await applyGravityAndRefill(); await resolveAllCascades(); updateAfterMove(); return {done:true};
+  }
+  // Полосатая + полосатая — ряд+колонка
+  if((A.type===Type.STRIPED_H||A.type===Type.STRIPED_V) && (B.type===Type.STRIPED_H||B.type===Type.STRIPED_V)){
+    const s1=activateStriped(A), s2=activateStriped(B); const cl=new Set([...s1,...s2]); state.score += SCORE_POWERUP_ACT*2; sounds.cascade(2);
+    clearCells(cl); await wait(TRANSITION_MS); await applyGravityAndRefill(); await resolveAllCascades(); updateAfterMove(); return {done:true};
+  }
+  // Полосатая + 3x3
+  if((A.type===Type.BOMB_3 && (B.type===Type.STRIPED_H||B.type===Type.STRIPED_V))||(B.type===Type.BOMB_3 && (A.type===Type.STRIPED_H||A.type===Type.STRIPED_V))){
+    const sA=(A.type===Type.BOMB_3)?activateBomb3(A):activateStriped(A);
+    const sB=(B.type===Type.BOMB_3)?activateBomb3(B):activateStriped(B);
+    const cl=new Set([...sA,...sB]); state.score += SCORE_POWERUP_ACT*2; sounds.cascade(2);
+    clearCells(cl); await wait(TRANSITION_MS); await applyGravityAndRefill(); await resolveAllCascades(); updateAfterMove(); return {done:true};
+  }
+  // Цветовая + полосатая → все этого цвета становятся полосатыми и активируются
+  if((A.type===Type.COLOR && (B.type===Type.STRIPED_H||B.type===Type.STRIPED_V))||(B.type===Type.COLOR && (A.type===Type.STRIPED_H||A.type===Type.STRIPED_V))){
+    const colorKind = (A.type===Type.COLOR)? B.kind : A.kind;
+    const stripedType = (A.type===Type.STRIPED_H||B.type===Type.STRIPED_H) ? Type.STRIPED_H : Type.STRIPED_V;
+    const cl = activateAllOfKindTo(stripedType, colorKind); state.score += SCORE_POWERUP_ACT*3; sounds.cascade(3);
+    clearCells(cl); await wait(TRANSITION_MS); await applyGravityAndRefill(); await resolveAllCascades(); updateAfterMove(); return {done:true};
+  }
+  // Цветовая + 3x3 → все этого цвета становятся 3x3 и взрываются
+  if((A.type===Type.COLOR && B.type===Type.BOMB_3)||(B.type===Type.COLOR && A.type===Type.BOMB_3)){
+    const colorKind=(A.type===Type.COLOR)? B.kind : A.kind;
+    const cl=activateAllOfKindTo(Type.BOMB_3, colorKind); state.score += SCORE_POWERUP_ACT*3; sounds.cascade(3);
+    clearCells(cl); await wait(TRANSITION_MS); await applyGravityAndRefill(); await resolveAllCascades(); updateAfterMove(); return {done:true};
+  }
+  // Один спец + обычный — разрешаем активацию без матча
+  if(aSpec ^ bSpec){
+    const sp = aSpec ? A : B;
+    let cl;
+    if(sp.type===Type.STRIPED_H||sp.type===Type.STRIPED_V) cl=activateStriped(sp);
+    else if(sp.type===Type.BOMB_3) cl=activateBomb3(sp);
+    else return {done:false};
+    state.score += SCORE_POWERUP_ACT; sounds.cascade(1);
+    clearCells(cl); await wait(TRANSITION_MS); await applyGravityAndRefill(); await resolveAllCascades(); updateAfterMove(); return {done:true};
+  }
+  return {done:false};
+}
+
+/* =========================
+   ВЫБОР/КЛАВИАТУРА
+========================= */
+function selectOrSwap(tile){
+  clearHint();
+  if(!state.selected){ setSelected(tile); sounds.click(); }
+  else{
+    const a=state.selected; const b={r:tile.r,c:tile.c};
+    if(a.r===b.r && a.c===b.c){ setSelected(null); return; }
+    if(!areNeighbors(a,b)){ setSelected(state.board[b.r][b.c]); return; }
+    setSelected(null); performSwap(a,b).then(()=>scheduleHint());
+  }
+}
+boardSVG.addEventListener('keydown', e=>{
+  if(state.paused || state.inputLocked) return;
+  const focusEl = document.activeElement?.closest('.tile') || boardSVG.querySelector('.tile');
+  const id = focusEl ? parseInt(focusEl.getAttribute('data-id'),10) : null;
+  const t = id ? state.tilesById.get(id) : null; if(!t) return;
+  let consumed=true;
+  if(e.key==='ArrowLeft') moveFocus(t,0,-1);
+  else if(e.key==='ArrowRight') moveFocus(t,0,1);
+  else if(e.key==='ArrowUp') moveFocus(t,-1,0);
+  else if(e.key==='ArrowDown') moveFocus(t,1,0);
+  else if(e.key==='Enter' || e.key===' ') selectOrSwap(t);
+  else if(e.key==='Escape') setSelected(null);
+  else consumed=false;
+  if(consumed) e.preventDefault();
+});
+function moveFocus(tile, dr, dc){
+  const r=clamp(tile.r+dr,0,BOARD_ROWS-1), c=clamp(tile.c+dc,0,BOARD_COLS-1);
+  state.board[r][c]?.el.focus({preventScroll:true});
+}
+
+/* =========================
+   UI / ОВЕРЛЕИ / ТАЙМЕР
+========================= */
+const newGameBtn=document.getElementById('newGameBtn');
+const pauseBtn=document.getElementById('pauseBtn');
+const resumeBtn=document.getElementById('resumeBtn');
+const pauseOverlay=document.getElementById('pauseOverlay');
+const settingsBtn=document.getElementById('settingsBtn');
+const settingsOverlay=document.getElementById('settings');
+const settingsClose=document.getElementById('settingsClose');
+const modeSelect=document.getElementById('modeSelect');
+const themeSelect=document.getElementById('themeSelect');
+const soundToggle=document.getElementById('soundToggle');
+const soundBtn=document.getElementById('soundBtn');
+const onboarding=document.getElementById('onboarding');
+const helpOk=document.getElementById('helpOk');
+const dontShowHelp=document.getElementById('dontShowHelp');
+const gameOver=document.getElementById('gameOver');
+const overText=document.getElementById('overText');
+const overNew=document.getElementById('overNew');
+const goalLabel=document.getElementById('goalLabel');
+const goalStat=document.getElementById('goalStat');
+const movesStat=document.getElementById('movesStat');
+const timeStat=document.getElementById('timeStat');
+let timerHandle=null;
+
+function updateModeUI(){
+  if(state.mode==='moves'){ goalLabel.textContent='Цель:'; goalStat.style.display=''; movesStat.style.display=''; timeStat.style.display='none'; }
+  else{ goalLabel.textContent='Цель:'; goalStat.style.display=''; movesStat.style.display='none'; timeStat.style.display=''; }
+}
+function startTimer(){
+  if(timerHandle) clearInterval(timerHandle);
+  if(state.mode!=='timed') return;
+  timerHandle = setInterval(()=>{
+    if(!state.paused && !state.inputLocked){
+      state.timeLeft = Math.max(0, state.timeLeft-1); setStatus();
+      if(state.timeLeft===0) endGame(state.score>=state.target);
+    }
+  }, 1000);
+}
+function pauseGame(set=true){
+  state.paused=set; pauseOverlay.classList.toggle('show', set);
+  pauseBtn.textContent = set ? 'Продолжить' : 'Пауза';
+  pauseBtn.setAttribute('aria-pressed', set ? 'true' : 'false');
+}
+newGameBtn.addEventListener('click', ()=>{ sounds.button(); newGame(); });
+pauseBtn.addEventListener('click', ()=>{ sounds.button(); pauseGame(!state.paused); });
+resumeBtn.addEventListener('click', ()=>{ sounds.button(); pauseGame(false); });
+settingsBtn.addEventListener('click', ()=>{ sounds.button(); openSettings(); });
+settingsClose.addEventListener('click', ()=>{ sounds.button(); closeSettings(); });
+soundBtn.addEventListener('click', ()=>{ state.soundOn=!state.soundOn; sounds.button(); soundBtn.textContent = state.soundOn?'Звук: Вкл':'Звук: Выкл'; soundBtn.setAttribute('aria-pressed', state.soundOn?'true':'false'); soundToggle.checked=state.soundOn; saveLocal(); });
+
+function openSettings(){ modeSelect.value=state.mode; themeSelect.value=state.theme; soundToggle.checked=state.soundOn; settingsOverlay.classList.add('show'); }
+function closeSettings(){
+  settingsOverlay.classList.remove('show');
+  const newMode=modeSelect.value, newTheme=themeSelect.value, newSound=soundToggle.checked;
+  const modeChanged = newMode!==state.mode; state.mode=newMode; state.theme=newTheme; state.soundOn=newSound;
+  applyTheme(); updateModeUI(); saveLocal(); if(modeChanged) newGame();
+}
+helpOk.addEventListener('click', ()=>{ onboarding.classList.remove('show'); if(dontShowHelp.checked) localStorage.setItem('m3_hideHelp','1'); sounds.button(); });
+overNew.addEventListener('click', ()=>{ gameOver.classList.remove('show'); newGame(); });
+
+function showHelpIfNeeded(){ if(localStorage.getItem('m3_hideHelp')!=='1') onboarding.classList.add('show'); }
+function endGame(win){
+  state.paused=true; clearHint();
+  overText.textContent = (win ? 'Победа!' : 'Не хватило очков') + ` Ваш счёт: ${state.score}.`;
+  gameOver.classList.add('show');
+  if(state.score>state.best){ state.best=state.score; saveLocal(); }
+  setStatus();
+}
+function updateAfterMove(){
+  scheduleHint();
+  if(state.mode==='moves'){ state.movesLeft=Math.max(0, state.movesLeft-1); if(state.movesLeft===0) endGame(state.score>=state.target); }
+  if(state.score>state.best) state.best=state.score;
+  setStatus();
+  selfCheck();
+}
+
+/* =========================
+   САМООТЛАДКА
+========================= */
+function hasAnyMatches(){ return findMatches().length>0; }
+function hasAnyMove(){ return !!findAnyPossibleMove(); }
+function boardFilled(){ for(let r=0;r<BOARD_ROWS;r++) for(let c=0;c<BOARD_COLS;c++) if(!state.board[r][c]) return false; return true; }
+function selfCheck(){ const ok = boardFilled() && hasAnyMove() && !hasAnyMatches(); console.log('%cSelf-check','color:#09f', ok?'OK':'CHECK',{boardFilled:boardFilled(), hasAnyMove:hasAnyMove(), hasAnyMatches:hasAnyMatches()}); }
+
+/* =========================
+   ИНИЦИАЛИЗАЦИЯ / НОВАЯ ИГРА
+========================= */
+function resetBoardDOM(){ while(boardSVG.firstChild) boardSVG.removeChild(boardSVG.firstChild); }
+function configureAndSize(){
+  setBoardSize(); // ВАЖНО: сначала размер, затем монтирование — иначе на iOS поле может не отрисоваться
+}
+function newGame(){
+  clearHint();
+  state.rngSeed = Date.now() & 0x7fffffff;
+  state.score=0; state.target=TARGET_SCORE; state.movesLeft=MOVES_COUNT; state.timeLeft=TIMED_SECONDS;
+  state.paused=false; state.inputLocked=false; state.selected=null; state.idCounter=1; state.tilesById.clear();
+  document.getElementById('goal').textContent=TARGET_SCORE; document.getElementById('moves').textContent=MOVES_COUNT; document.getElementById('time').textContent=timeFormat(TIMED_SECONDS);
+  gameOver.classList.remove('show'); pauseOverlay.classList.remove('show');
+  resetBoardDOM(); configureAndSize(); setStatus(); updateModeUI();
+  generateBoard(); startTimer(); scheduleHint();
+}
+
+/* =========================
+   СЛУШАТЕЛИ ОБЩИЕ
+========================= */
+['pointerdown','pointermove','pointerup','keydown','click','touchstart'].forEach(evt=>{
+  window.addEventListener(evt, ()=>{ scheduleHint(); }, {passive:true});
+});
+window.addEventListener('resize', ()=>{
+  const old = state.tilePx; const wasW = parseInt(boardSVG.getAttribute('width')||'0',10);
+  setBoardSize();
+  // Переразместить плитки без пересоздания
+  if(state.board.length){
+    for(let r=0;r<BOARD_ROWS;r++) for(let c=0;c<BOARD_COLS;c++){ const t=state.board[r][c]; if(t){ refreshGem(t); positionTile(t); } }
+  }
+}, {passive:true});
+
+/* =========================
+   СТАРТ
+========================= */
+(function init(){
+  loadLocal(); applyTheme(); setBoardSize(); setStatus(); updateModeUI();
+  document.getElementById('goal').textContent = TARGET_SCORE;
+  document.getElementById('moves').textContent = MOVES_COUNT;
+  document.getElementById('time').textContent = timeFormat(TIMED_SECONDS);
+  // ВАЖНО: сначала задать размеры SVG (setBoardSize), затем генерировать
+  generateBoard();
+  showHelpIfNeeded();
+  startTimer();
+  scheduleHint();
+})();
+</script>
+</body>
+</html>
